@@ -11,7 +11,7 @@
         <relativePath/>
     </parent>
 
-    <groupId>com.enviro365</groupId>
+    <groupId>com.enviro.assessment.junior.mpho</groupId>
     <artifactId>withdrawal-system</artifactId>
     <version>0.0.1-SNAPSHOT</version>
     <name>enviro365-investor-withdrawal-system</name>
