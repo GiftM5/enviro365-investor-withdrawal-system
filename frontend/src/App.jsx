@@ -2,7 +2,10 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { BrowserRouter, Navigate, Route, Routes, Link, useNavigate, useParams } from 'react-router-dom';
 import axios from 'axios';
 
+// All dashboard data is served from the Spring API, so a single base URL keeps
+// the frontend consistent and avoids repeating localhost and route strings.
 const API_BASE = 'http://localhost:8080/api';
+const apiClient = axios.create({ baseURL: API_BASE });
 
 const currency = (value) =>
   new Intl.NumberFormat('en-ZA', {
@@ -20,8 +23,36 @@ const formatDate = (value) => {
 
 const calculateAge = (dateOfBirth) => {
   if (!dateOfBirth) return '—';
-  const diff = new Date(Date.now() - new Date(dateOfBirth).getTime());
-  return Math.abs(diff.getUTCFullYear() - 1970);
+
+  const birthDate = new Date(dateOfBirth);
+  const today = new Date();
+  let age = today.getFullYear() - birthDate.getFullYear();
+  const birthdayThisYear = new Date(today.getFullYear(), birthDate.getMonth(), birthDate.getDate());
+
+  if (birthdayThisYear > today) {
+    age -= 1;
+  }
+
+  return age;
+};
+
+// Withdrawal rules are enforced both in the UI and on the backend; this helper
+// keeps the user experience aligned with the business constraints.
+const validateWithdrawalAmount = (product, rawValue) => {
+  const parsed = Number(rawValue);
+  if (!rawValue || rawValue.trim() === '') {
+    return 'Please enter a withdrawal amount.';
+  }
+  if (Number.isNaN(parsed) || parsed <= 0) {
+    return 'Withdrawal amount must be greater than zero.';
+  }
+  if (parsed > Number(product.balance)) {
+    return 'Withdrawal amount cannot exceed the available balance.';
+  }
+  if (parsed > Number(product.maximumWithdrawal)) {
+    return 'Withdrawal amount cannot exceed 90% of the available balance.';
+  }
+  return '';
 };
 
 function App() {
@@ -45,7 +76,7 @@ function InvestorDirectoryPage() {
 
   useEffect(() => {
     let mounted = true;
-    axios.get(`${API_BASE}/investors`)
+    apiClient.get('/investors')
       .then((response) => {
         if (mounted) {
           setInvestors(response.data || []);
@@ -121,9 +152,11 @@ function InvestorDashboardPage() {
     setLoading(true);
     setError('');
 
+    // The dashboard needs both the current portfolio and recent notices in one pass,
+    // so the page can render a complete snapshot without a second fetch cycle.
     Promise.all([
-      axios.get(`${API_BASE}/investors/${investorId}/portfolio`),
-      axios.get(`${API_BASE}/investors/${investorId}/withdrawals`)
+      apiClient.get(`/investors/${investorId}/portfolio`),
+      apiClient.get(`/investors/${investorId}/withdrawals`)
     ])
       .then(([portfolioRes, historyRes]) => {
         const data = portfolioRes.data;
@@ -160,25 +193,8 @@ function InvestorDashboardPage() {
     setConfirmOpen(false);
   };
 
-  const validateWithdrawalAmount = (rawValue) => {
-    const parsed = Number(rawValue);
-    if (!rawValue || rawValue.trim() === '') {
-      return 'Please enter a withdrawal amount.';
-    }
-    if (Number.isNaN(parsed) || parsed <= 0) {
-      return 'Withdrawal amount must be greater than zero.';
-    }
-    if (parsed > Number(selectedProduct.balance)) {
-      return 'Withdrawal amount cannot exceed the available balance.';
-    }
-    if (parsed > Number(selectedProduct.maximumWithdrawal)) {
-      return 'Withdrawal amount cannot exceed 90% of the available balance.';
-    }
-    return '';
-  };
-
   const continueToConfirmation = () => {
-    const error = validateWithdrawalAmount(withdrawalInput);
+    const error = validateWithdrawalAmount(selectedProduct, withdrawalInput);
     setWithFormError(error);
     if (!error) {
       setConfirmOpen(true);
@@ -188,14 +204,16 @@ function InvestorDashboardPage() {
   const submitWithdrawal = () => {
     if (!selectedProduct || !withdrawalInput) return;
 
-    const error = validateWithdrawalAmount(withdrawalInput);
+    // The server remains the source of truth for validation, but the client checks
+    // early so users do not submit invalid data and incur unnecessary round-trips.
+    const error = validateWithdrawalAmount(selectedProduct, withdrawalInput);
     if (error) {
       setWithFormError(error);
       return;
     }
 
     setProcessing(true);
-    axios.post(`${API_BASE}/withdrawals`, {
+    apiClient.post('/withdrawals', {
       investorId: Number(investorId),
       productId: selectedProduct.productId,
       amount: Number(withdrawalInput)
@@ -357,7 +375,7 @@ function InvestorDashboardPage() {
                 step="0.01"
                 onChange={(e) => {
                   setWithdrawalInput(e.target.value);
-                  setWithFormError(validateWithdrawalAmount(e.target.value));
+                  setWithFormError(validateWithdrawalAmount(selectedProduct, e.target.value));
                 }}
                 placeholder="0.00"
               />
@@ -429,7 +447,7 @@ function WithdrawalHistoryPage() {
 
   const loadHistory = () => {
     setLoading(true);
-    axios.get(`${API_BASE}/investors/${investorId}/withdrawals`)
+    apiClient.get(`/investors/${investorId}/withdrawals`)
       .then((response) => {
         setItems(response.data || []);
         setLoading(false);
