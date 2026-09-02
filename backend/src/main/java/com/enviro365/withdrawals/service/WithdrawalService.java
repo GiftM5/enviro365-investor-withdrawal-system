@@ -1,5 +1,6 @@
 package com.enviro365.withdrawals.service;
 
+import com.enviro365.withdrawals.dto.InvestorSummary;
 import com.enviro365.withdrawals.dto.PortfolioResponse;
 import com.enviro365.withdrawals.dto.WithdrawalRequest;
 import com.enviro365.withdrawals.dto.WithdrawalResponse;
@@ -14,8 +15,11 @@ import org.springframework.transaction.annotation.Transactional;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.List;
+import java.util.stream.Collectors;
 
 @Service
 public class WithdrawalService {
@@ -32,6 +36,19 @@ public class WithdrawalService {
         this.investorRepository = investorRepository;
         this.investmentProductRepository = investmentProductRepository;
         this.withdrawalNoticeRepository = withdrawalNoticeRepository;
+    }
+
+    public List<InvestorSummary> getAllInvestors() {
+        return investorRepository.findAll().stream()
+                .sorted(Comparator.comparing(Investor::getLastName).thenComparing(Investor::getFirstName))
+                .map(investor -> new InvestorSummary(
+                        investor.getId(),
+                        investor.getFirstName(),
+                        investor.getLastName(),
+                        investor.getEmail(),
+                        investor.getDateOfBirth(),
+                        investor.getFullName()))
+                .collect(Collectors.toList());
     }
 
     public PortfolioResponse getPortfolio(Long investorId) {
@@ -109,7 +126,48 @@ public class WithdrawalService {
     public List<WithdrawalNotice> getWithdrawalHistory(Long investorId) {
         investorRepository.findById(investorId)
                 .orElseThrow(() -> new ResourceNotFoundException("Investor not found with id: " + investorId));
-        return withdrawalNoticeRepository.findByInvestorId(investorId);
+        return withdrawalNoticeRepository.findByInvestorId(investorId).stream()
+                .sorted(Comparator.comparing(WithdrawalNotice::getCreatedAt).reversed())
+                .collect(Collectors.toList());
+    }
+
+    public String exportWithdrawalsCsv(Long investorId, Long productId, LocalDate from, LocalDate to, String status) {
+        investorRepository.findById(investorId)
+                .orElseThrow(() -> new ResourceNotFoundException("Investor not found with id: " + investorId));
+
+        List<WithdrawalNotice> notices = getWithdrawalHistory(investorId).stream()
+                .filter(notice -> productId == null || notice.getProductId().equals(productId))
+                .filter(notice -> {
+                    LocalDateTime createdAt = notice.getCreatedAt();
+                    if (from != null && createdAt.toLocalDate().isBefore(from)) {
+                        return false;
+                    }
+                    if (to != null && createdAt.toLocalDate().isAfter(to)) {
+                        return false;
+                    }
+                    return true;
+                })
+                .filter(notice -> status == null || status.isBlank() || notice.getStatus().name().equalsIgnoreCase(status))
+                .collect(Collectors.toList());
+
+        StringBuilder csv = new StringBuilder();
+        csv.append("id,date,product_id,product_name,amount,status,previous_balance,remaining_balance\n");
+
+        for (WithdrawalNotice notice : notices) {
+            String productName = investmentProductRepository.findById(notice.getProductId())
+                    .map(InvestmentProduct::getProductName)
+                    .orElse("Unknown");
+            csv.append(notice.getId()).append(',')
+                    .append(notice.getCreatedAt().toLocalDate()).append(',')
+                    .append(notice.getProductId()).append(',')
+                    .append(productName).append(',')
+                    .append(notice.getAmount()).append(',')
+                    .append(notice.getStatus()).append(',')
+                    .append(notice.getPreviousBalance()).append(',')
+                    .append(notice.getRemainingBalance()).append('\n');
+        }
+
+        return csv.toString();
     }
 
     private void validateOwnership(Investor investor, InvestmentProduct product) {
@@ -129,15 +187,13 @@ public class WithdrawalService {
     }
 
     private void validateRetirementEligibility(Investor investor, ProductType productType) {
-        if (productType == ProductType.RETIREMENT) {
-            int age = LocalDate.now().getYear() - investor.getDateOfBirth().getYear();
-            if (investor.getDateOfBirth().plusYears(age).isAfter(LocalDate.now())) {
-                age = age - 1;
-            }
+        if (productType != ProductType.RETIREMENT) {
+            return;
+        }
 
-            if (age <= 65) {
-                throw new IllegalArgumentException("Retirement withdrawals are only allowed for investors older than 65.");
-            }
+        int age = calculateAge(investor);
+        if (age <= 65) {
+            throw new IllegalArgumentException("Retirement withdrawals are only allowed for investors older than 65.");
         }
     }
 
@@ -146,16 +202,22 @@ public class WithdrawalService {
             throw new IllegalArgumentException("Withdrawal amount exceeds the available product balance.");
         }
 
-        BigDecimal maxAllowed = balance.multiply(new BigDecimal("0.90")).setScale(2, RoundingMode.HALF_UP);
+        BigDecimal maxAllowed = calculateMaximumWithdrawal(balance);
         if (amount.compareTo(maxAllowed) > 0) {
             throw new IllegalArgumentException("Withdrawal amount exceeds the maximum allowed amount.");
         }
     }
 
-    private BigDecimal calculateMaximumWithdrawal(ProductType productType, BigDecimal balance) {
-        if (productType == ProductType.RETIREMENT) {
-            return balance.multiply(new BigDecimal("0.90")).setScale(2, RoundingMode.HALF_UP);
-        }
+    private BigDecimal calculateMaximumWithdrawal(BigDecimal balance) {
         return balance.multiply(new BigDecimal("0.90")).setScale(2, RoundingMode.HALF_UP);
+    }
+
+    private int calculateAge(Investor investor) {
+        LocalDate today = LocalDate.now();
+        int age = today.getYear() - investor.getDateOfBirth().getYear();
+        if (investor.getDateOfBirth().plusYears(age).isAfter(today)) {
+            age = age - 1;
+        }
+        return age;
     }
 }
