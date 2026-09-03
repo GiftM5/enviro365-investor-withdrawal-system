@@ -34,46 +34,47 @@ The application solves this by centralizing validation in the backend and presen
 The repository is organized into a small monorepo with a backend API, a frontend application, and supporting documentation.
 
 ```text
-backend/
-├── src/
-│   ├── main/
-│   │   ├── java/
-│   │   │   └── com/enviro/assessment/junior/mpho/
-│   │   │       ├── controller/
-│   │   │       ├── dto/
-│   │   │       ├── entity/
-│   │   │       ├── exception/
-│   │   │       ├── repository/
-│   │   │       └── service/
-│   │   └── resources/
-│   │       ├── application.properties
-│   │       └── data.sql
-│   └── test/java/
-│       └── com/enviro/assessment/junior/mpho/
-├── pom.xml
-└── target/
-
-frontend/
-├── src/
-│   ├── App.jsx
-│   ├── main.jsx
-│   └── styles.css
-├── index.html
-├── package.json
-├── vite.config.js
-└── dist/
-
-docs/
-├── AI_Usage.md
-├── api-specification.md
-├── business-rules.md
-├── database-design.md
-├── screenshots/
-│   ├── investor-directory.svg
-│   └── withdrawal-history.svg
-
-Makefile
-README.md
+.
+├── .github/
+├── .vscode/
+├── backend/
+│   ├── pom.xml
+│   └── src/
+│       ├── main/
+│       │   ├── java/com/enviro/assessment/junior/mpho/
+│       │   │   ├── WithdrawalApplication.java
+│       │   │   ├── controller/
+│       │   │   ├── dto/
+│       │   │   ├── entity/
+│       │   │   ├── exception/
+│       │   │   ├── repository/
+│       │   │   └── service/
+│       │   └── resources/
+│       │       ├── application.properties
+│       │       └── data.sql
+│       └── test/java/com/enviro/assessment/junior/mpho/
+│           └── WithdrawalServiceTest.java
+├── docs/
+│   ├── AI_Usage.md
+│   ├── api-specification.md
+│   ├── business-rules.md
+│   ├── database-design.md
+│   └── screenshots/
+│       ├── Eroor-Withdrawal.jpeg
+│       ├── Investor-Portal.jpeg
+│       ├── Investor-Portfolio.jpeg
+│       └── Withdrawal-History.jpeg
+├── frontend/
+│   ├── src/
+│   │   ├── App.jsx
+│   │   ├── main.jsx
+│   │   └── styles.css
+│   ├── index.html
+│   ├── package.json
+│   └── vite.config.js
+├── .gitignore
+├── Makefile
+└── README.md
 ```
 
 ## Documentation
