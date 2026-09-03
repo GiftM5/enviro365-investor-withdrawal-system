@@ -230,7 +230,7 @@ make clean
 
 ## Screenshots
 
-The following mock screenshots represent the main user flows of the application:
+The following screenshots represent the main user flows of the application:
 
 ![Investor directory](docs/screenshots/Investor-Portal.jpeg)
 
