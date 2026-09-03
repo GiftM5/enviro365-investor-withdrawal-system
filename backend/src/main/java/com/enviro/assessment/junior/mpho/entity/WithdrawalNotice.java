@@ -33,6 +33,13 @@ public class WithdrawalNotice {
 
     @Enumerated(EnumType.STRING)
     @Column(nullable = false)
+    private WithdrawalReason reason;
+
+    @Column(nullable = false)
+    private String reference;
+
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false)
     private WithdrawalStatus status;
 
     @Column(name = "created_at", nullable = false)
@@ -42,13 +49,16 @@ public class WithdrawalNotice {
     }
 
     public WithdrawalNotice(Long investorId, Long productId, BigDecimal amount,
-                           BigDecimal previousBalance, BigDecimal remainingBalance) {
+                           BigDecimal previousBalance, BigDecimal remainingBalance,
+                           WithdrawalReason reason, String reference, WithdrawalStatus status) {
         this.investorId = investorId;
         this.productId = productId;
         this.amount = amount;
         this.previousBalance = previousBalance;
         this.remainingBalance = remainingBalance;
-        this.status = WithdrawalStatus.APPROVED;
+        this.reason = reason;
+        this.reference = reference;
+        this.status = status;
         this.createdAt = LocalDateTime.now();
     }
 
@@ -98,6 +108,22 @@ public class WithdrawalNotice {
 
     public void setRemainingBalance(BigDecimal remainingBalance) {
         this.remainingBalance = remainingBalance;
+    }
+
+    public WithdrawalReason getReason() {
+        return reason;
+    }
+
+    public void setReason(WithdrawalReason reason) {
+        this.reason = reason;
+    }
+
+    public String getReference() {
+        return reference;
+    }
+
+    public void setReference(String reference) {
+        this.reference = reference;
     }
 
     public WithdrawalStatus getStatus() {

@@ -1,5 +1,6 @@
 package com.enviro.assessment.junior.mpho.dto;
 
+import com.enviro.assessment.junior.mpho.entity.WithdrawalReason;
 import com.enviro.assessment.junior.mpho.entity.WithdrawalStatus;
 
 import java.math.BigDecimal;
@@ -16,6 +17,8 @@ public class WithdrawalResponse {
     private BigDecimal amount;
     private BigDecimal previousBalance;
     private BigDecimal remainingBalance;
+    private WithdrawalReason reason;
+    private String reference;
     private WithdrawalStatus status;
     private LocalDateTime createdAt;
 
@@ -24,6 +27,7 @@ public class WithdrawalResponse {
 
     public WithdrawalResponse(Long withdrawalId, Long investorId, Long productId, BigDecimal amount,
                              BigDecimal previousBalance, BigDecimal remainingBalance,
+                             WithdrawalReason reason, String reference,
                              WithdrawalStatus status, LocalDateTime createdAt) {
         this.withdrawalId = withdrawalId;
         this.investorId = investorId;
@@ -31,6 +35,8 @@ public class WithdrawalResponse {
         this.amount = amount;
         this.previousBalance = previousBalance;
         this.remainingBalance = remainingBalance;
+        this.reason = reason;
+        this.reference = reference;
         this.status = status;
         this.createdAt = createdAt;
     }
@@ -81,6 +87,22 @@ public class WithdrawalResponse {
 
     public void setRemainingBalance(BigDecimal remainingBalance) {
         this.remainingBalance = remainingBalance;
+    }
+
+    public WithdrawalReason getReason() {
+        return reason;
+    }
+
+    public void setReason(WithdrawalReason reason) {
+        this.reason = reason;
+    }
+
+    public String getReference() {
+        return reference;
+    }
+
+    public void setReference(String reference) {
+        this.reference = reference;
     }
 
     public WithdrawalStatus getStatus() {

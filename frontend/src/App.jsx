@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { BrowserRouter, Navigate, Route, Routes, Link, useNavigate, useParams } from 'react-router-dom';
 import axios from 'axios';
 
@@ -55,15 +55,69 @@ const validateWithdrawalAmount = (product, rawValue) => {
   return '';
 };
 
+// Preset reasons mirror the backend's WithdrawalReason enum so the dropdown value posts directly.
+const WITHDRAWAL_REASONS = [
+  { value: 'LIVING_EXPENSES', label: 'Living expenses' },
+  { value: 'MEDICAL', label: 'Medical costs' },
+  { value: 'EDUCATION', label: 'Education' },
+  { value: 'DEBT_REPAYMENT', label: 'Debt repayment' },
+  { value: 'HOME_IMPROVEMENT', label: 'Home improvement' },
+  { value: 'EMERGENCY', label: 'Emergency' },
+  { value: 'OTHER', label: 'Other' },
+];
+
+const reasonLabel = (value) => WITHDRAWAL_REASONS.find((r) => r.value === value)?.label || value || '—';
+
+function StatusBadge({ status }) {
+  const key = String(status || '').toUpperCase();
+  const className = key === 'APPROVED' ? 'status-approved' : key === 'REJECTED' ? 'status-rejected' : 'status-pending';
+  return <span className={`status-badge ${className}`}>{key || 'UNKNOWN'}</span>;
+}
+
+// A single toast surface handles every thrown/caught exception across the app,
+// so failures always appear as the same red, self-dismissing popup instead of inline sentences.
+const ToastContext = React.createContext(() => {});
+const useToast = () => useContext(ToastContext);
+
+function ToastProvider({ children }) {
+  const [toast, setToast] = useState(null);
+  const timerRef = useRef(null);
+
+  const showError = (message) => {
+    if (timerRef.current) clearTimeout(timerRef.current);
+    setToast({ message, key: Date.now() });
+    timerRef.current = setTimeout(() => setToast(null), 5000);
+  };
+
+  useEffect(() => () => timerRef.current && clearTimeout(timerRef.current), []);
+
+  return (
+    <ToastContext.Provider value={showError}>
+      {children}
+      <div className="toast-stack" aria-live="assertive">
+        {toast && (
+          <div className="toast toast-error" key={toast.key} role="alert">
+            <span className="toast-icon">!</span>
+            <span className="toast-message">{toast.message}</span>
+            <button className="toast-close" onClick={() => setToast(null)} aria-label="Dismiss">×</button>
+          </div>
+        )}
+      </div>
+    </ToastContext.Provider>
+  );
+}
+
 function App() {
   return (
     <BrowserRouter>
-      <Routes>
-        <Route path="/" element={<InvestorDirectoryPage />} />
-        <Route path="/investor/:investorId/dashboard" element={<InvestorDashboardPage />} />
-        <Route path="/investor/:investorId/withdrawals" element={<WithdrawalHistoryPage />} />
-        <Route path="*" element={<Navigate to="/" replace />} />
-      </Routes>
+      <ToastProvider>
+        <Routes>
+          <Route path="/" element={<InvestorDirectoryPage />} />
+          <Route path="/investor/:investorId/dashboard" element={<InvestorDashboardPage />} />
+          <Route path="/investor/:investorId/withdrawals" element={<WithdrawalHistoryPage />} />
+          <Route path="*" element={<Navigate to="/" replace />} />
+        </Routes>
+      </ToastProvider>
     </BrowserRouter>
   );
 }
@@ -73,6 +127,7 @@ function InvestorDirectoryPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const navigate = useNavigate();
+  const showError = useToast();
 
   useEffect(() => {
     let mounted = true;
@@ -85,7 +140,8 @@ function InvestorDirectoryPage() {
       })
       .catch(() => {
         if (mounted) {
-          setError('Unable to load investors. Please try again.');
+          setError('Unable to load investor directory.');
+          showError('Unable to load investors. Please try again.');
           setLoading(false);
         }
       });
@@ -98,7 +154,7 @@ function InvestorDirectoryPage() {
   }
 
   if (error) {
-    return <Shell><div className="state-box error"><strong>Unable to load investor directory.</strong><div>{error}</div><button onClick={() => window.location.reload()}>Retry</button></div></Shell>;
+    return <Shell><div className="state-box error"><strong>Unable to load investor directory.</strong><button className="secondary" onClick={() => window.location.reload()}>Retry</button></div></Shell>;
   }
 
   return (
@@ -143,10 +199,13 @@ function InvestorDashboardPage() {
   const [showForm, setShowForm] = useState(false);
   const [withdrawalInput, setWithdrawalInput] = useState('');
   const [withFormError, setWithFormError] = useState('');
+  const [reason, setReason] = useState('');
+  const [reference, setReference] = useState('');
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [processing, setProcessing] = useState(false);
   const [successMessage, setSuccessMessage] = useState(null);
   const navigate = useNavigate();
+  const showError = useToast();
 
   const loadInvestorData = () => {
     setLoading(true);
@@ -164,7 +223,8 @@ function InvestorDashboardPage() {
           investorId: data.investorId,
           investorName: data.investorName,
           portfolioNumber: data.portfolioNumber,
-          age: calculateAge(data.dateOfBirth)
+          dateOfBirth: data.dateOfBirth,
+          age: data.age ?? calculateAge(data.dateOfBirth)
         });
         setProducts(data.products || []);
         setHistory((historyRes.data || []).slice(0, 5));
@@ -172,6 +232,7 @@ function InvestorDashboardPage() {
       })
       .catch(() => {
         setError('Unable to load portfolio. Please try again.');
+        showError('Unable to load your portfolio. Please try again.');
         setLoading(false);
       });
   };
@@ -190,15 +251,27 @@ function InvestorDashboardPage() {
     setShowForm(true);
     setWithdrawalInput('');
     setWithFormError('');
+    setReason('');
+    setReference('');
     setConfirmOpen(false);
   };
 
   const continueToConfirmation = () => {
     const error = validateWithdrawalAmount(selectedProduct, withdrawalInput);
-    setWithFormError(error);
-    if (!error) {
-      setConfirmOpen(true);
+    if (error) {
+      setWithFormError(error);
+      return;
     }
+    if (!reason) {
+      setWithFormError('Please select a reason for this withdrawal.');
+      return;
+    }
+    if (!reference.trim()) {
+      setWithFormError('Please provide a reference for this withdrawal.');
+      return;
+    }
+    setWithFormError('');
+    setConfirmOpen(true);
   };
 
   const submitWithdrawal = () => {
@@ -216,7 +289,9 @@ function InvestorDashboardPage() {
     apiClient.post('/withdrawals', {
       investorId: Number(investorId),
       productId: selectedProduct.productId,
-      amount: Number(withdrawalInput)
+      amount: Number(withdrawalInput),
+      reason,
+      reference: reference.trim()
     })
       .then((response) => {
         const result = response.data;
@@ -225,20 +300,25 @@ function InvestorDashboardPage() {
           productName: selectedProduct.productName,
           amount: result.amount,
           remainingBalance: result.remainingBalance,
-          createdAt: result.createdAt
+          createdAt: result.createdAt,
+          reference: result.reference,
+          reason: result.reason,
+          status: result.status
         });
         setConfirmOpen(false);
         setShowForm(false);
         setSelectedProduct(null);
         setWithdrawalInput('');
         setWithFormError('');
+        setReason('');
+        setReference('');
         loadInvestorData();
       })
       .catch((apiError) => {
         const msg = apiError?.response?.data?.message || 'This withdrawal could not be processed.';
         setConfirmOpen(false);
         setShowForm(true);
-        setWithFormError(msg);
+        showError(msg);
       })
       .finally(() => {
         setProcessing(false);
@@ -257,7 +337,7 @@ function InvestorDashboardPage() {
   }
 
   if (error) {
-    return <Shell><div className="state-box error"><strong>Unable to load portfolio.</strong><div>{error}</div><button onClick={loadInvestorData}>Retry</button></div></Shell>;
+    return <Shell><div className="state-box error"><strong>Unable to load portfolio.</strong><button className="secondary" onClick={loadInvestorData}>Retry</button></div></Shell>;
   }
 
   return (
@@ -266,6 +346,9 @@ function InvestorDashboardPage() {
         <div>
           <p className="eyebrow">Enviro365</p>
           <h1>Welcome to {investor?.investorName?.split(' ')[0] || 'Investor'}'s Portfolio</h1>
+          {investor?.age != null && (
+            <p className="muted" style={{ marginTop: '8px' }}>Age: {investor.age} years</p>
+          )}
         </div>
         <div className="header-actions">
           <Link to={`/investor/${investorId}/withdrawals`} className="text-link">Withdrawals</Link>
@@ -327,7 +410,7 @@ function InvestorDashboardPage() {
                   <td>{formatDate(entry.createdAt)}</td>
                   <td>{entry.productId}</td>
                   <td>{currency(entry.amount)}</td>
-                  <td>{entry.status}</td>
+                  <td><StatusBadge status={entry.status} /></td>
                 </tr>
               ))}
             </tbody>
@@ -385,11 +468,36 @@ function InvestorDashboardPage() {
                 <strong>{currency(remainingPreview())}</strong>
               </div>
 
+              <label className="field-label">Reason for Withdrawal</label>
+              <select
+                value={reason}
+                onChange={(e) => {
+                  setReason(e.target.value);
+                  if (e.target.value) setWithFormError('');
+                }}
+              >
+                <option value="">Select a reason...</option>
+                {WITHDRAWAL_REASONS.map((r) => (
+                  <option key={r.value} value={r.value}>{r.label}</option>
+                ))}
+              </select>
+
+              <label className="field-label">Reference</label>
+              <input
+                type="text"
+                value={reference}
+                onChange={(e) => {
+                  setReference(e.target.value);
+                  if (e.target.value.trim()) setWithFormError('');
+                }}
+                placeholder="e.g. your own tracking reference"
+              />
+
               {withFormError && <div className="inline-error">{withFormError}</div>}
             </div>
             <div className="modal-footer">
               <button className="secondary" onClick={() => setShowForm(false)}>Cancel</button>
-              <button className="primary" disabled={Boolean(withFormError) || !withdrawalInput} onClick={continueToConfirmation}>Continue</button>
+              <button className="primary" disabled={Boolean(withFormError) || !withdrawalInput || !reason || !reference.trim()} onClick={continueToConfirmation}>Continue</button>
             </div>
           </div>
         </div>
@@ -408,6 +516,8 @@ function InvestorDashboardPage() {
               <div className="confirm-row"><span>Current Balance</span><strong>{currency(selectedProduct.balance)}</strong></div>
               <div className="confirm-row"><span>Withdrawal Amount</span><strong>{currency(withdrawalInput)}</strong></div>
               <div className="confirm-row"><span>Remaining Balance</span><strong>{currency(Number(selectedProduct.balance) - Number(withdrawalInput))}</strong></div>
+              <div className="confirm-row"><span>Reason</span><strong>{reasonLabel(reason)}</strong></div>
+              <div className="confirm-row"><span>Reference</span><strong>{reference}</strong></div>
             </div>
             <div className="modal-footer">
               <button className="secondary" onClick={() => setConfirmOpen(false)}>Cancel</button>
@@ -425,7 +535,10 @@ function InvestorDashboardPage() {
             <div className="success-icon">✓</div>
             <h3>Withdrawal Submitted</h3>
             <p>The withdrawal notice has been successfully submitted.</p>
-            <div className="confirm-row"><span>Reference</span><strong>{successMessage.withdrawalId}</strong></div>
+            <div className="confirm-row"><span>Status</span><strong><StatusBadge status={successMessage.status} /></strong></div>
+            <div className="confirm-row"><span>Withdrawal ID</span><strong>{successMessage.withdrawalId}</strong></div>
+            <div className="confirm-row"><span>Reference</span><strong>{successMessage.reference}</strong></div>
+            <div className="confirm-row"><span>Reason</span><strong>{reasonLabel(successMessage.reason)}</strong></div>
             <div className="confirm-row"><span>Product</span><strong>{successMessage.productName}</strong></div>
             <div className="confirm-row"><span>Amount</span><strong>{currency(successMessage.amount)}</strong></div>
             <div className="confirm-row"><span>Remaining Balance</span><strong>{currency(successMessage.remainingBalance)}</strong></div>
@@ -444,6 +557,7 @@ function WithdrawalHistoryPage() {
   const [error, setError] = useState('');
   const [filters, setFilters] = useState({ productId: '', from: '', to: '', status: '' });
   const navigate = useNavigate();
+  const showError = useToast();
 
   const loadHistory = () => {
     setLoading(true);
@@ -454,6 +568,7 @@ function WithdrawalHistoryPage() {
       })
       .catch(() => {
         setError('Unable to load withdrawal history.');
+        showError('Unable to load withdrawal history. Please try again.');
         setLoading(false);
       });
   };
@@ -476,7 +591,7 @@ function WithdrawalHistoryPage() {
   }
 
   if (error) {
-    return <Shell><div className="state-box error"><strong>Unable to load withdrawal history.</strong><div>{error}</div><button onClick={loadHistory}>Retry</button></div></Shell>;
+    return <Shell><div className="state-box error"><strong>Unable to load withdrawal history.</strong><button className="secondary" onClick={loadHistory}>Retry</button></div></Shell>;
   }
 
   return (
@@ -515,6 +630,8 @@ function WithdrawalHistoryPage() {
             <select value={filters.status} onChange={(e) => setFilters({ ...filters, status: e.target.value })}>
               <option value="">All Statuses</option>
               <option value="APPROVED">Approved</option>
+              <option value="PENDING">Pending</option>
+              <option value="REJECTED">Rejected</option>
             </select>
           </div>
         </div>
@@ -535,6 +652,8 @@ function WithdrawalHistoryPage() {
                 <th>Date</th>
                 <th>Product</th>
                 <th>Amount</th>
+                <th>Reason</th>
+                <th>Reference</th>
                 <th>Previous Balance</th>
                 <th>Remaining Balance</th>
                 <th>Status</th>
@@ -546,9 +665,11 @@ function WithdrawalHistoryPage() {
                   <td>{formatDate(item.createdAt)}</td>
                   <td>{item.productId}</td>
                   <td>{currency(item.amount)}</td>
+                  <td>{reasonLabel(item.reason)}</td>
+                  <td>{item.reference || '—'}</td>
                   <td>{currency(item.previousBalance)}</td>
                   <td>{currency(item.remainingBalance)}</td>
-                  <td>{item.status}</td>
+                  <td><StatusBadge status={item.status} /></td>
                 </tr>
               ))}
             </tbody>

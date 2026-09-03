@@ -26,6 +26,10 @@ public class WithdrawalService {
 
     private static final BigDecimal ONE_HUNDRED = new BigDecimal("100");
 
+    // BR-006: withdrawals above 50% of the available balance are held for manual review
+    // instead of being auto-approved; everything else clears the same threshold instantly.
+    private static final BigDecimal AUTO_APPROVAL_THRESHOLD = new BigDecimal("0.50");
+
     private final InvestorRepository investorRepository;
     private final InvestmentProductRepository investmentProductRepository;
     private final WithdrawalNoticeRepository withdrawalNoticeRepository;
@@ -60,6 +64,8 @@ public class WithdrawalService {
         PortfolioResponse response = new PortfolioResponse();
         response.setInvestorId(investor.getId());
         response.setInvestorName(investor.getFullName());
+        response.setDateOfBirth(investor.getDateOfBirth());
+        response.setAge(calculateAge(investor));
 
         if (investor.getPortfolios() != null && !investor.getPortfolios().isEmpty()) {
             Portfolio portfolio = investor.getPortfolios().getFirst();
@@ -104,12 +110,17 @@ public class WithdrawalService {
         BigDecimal remainingBalance = previousBalance.subtract(request.getAmount());
         product.setBalance(remainingBalance);
 
+        WithdrawalStatus status = resolveStatus(previousBalance, request.getAmount());
+
         WithdrawalNotice notice = new WithdrawalNotice(
                 investor.getId(),
                 product.getId(),
                 request.getAmount(),
                 previousBalance,
-                remainingBalance
+                remainingBalance,
+                request.getReason(),
+                request.getReference(),
+                status
         );
 
         withdrawalNoticeRepository.save(notice);
@@ -122,9 +133,16 @@ public class WithdrawalService {
                 request.getAmount(),
                 previousBalance,
                 remainingBalance,
+                notice.getReason(),
+                notice.getReference(),
                 notice.getStatus(),
                 notice.getCreatedAt()
         );
+    }
+
+    private WithdrawalStatus resolveStatus(BigDecimal previousBalance, BigDecimal amount) {
+        BigDecimal autoApprovalLimit = previousBalance.multiply(AUTO_APPROVAL_THRESHOLD);
+        return amount.compareTo(autoApprovalLimit) > 0 ? WithdrawalStatus.PENDING : WithdrawalStatus.APPROVED;
     }
 
     public List<WithdrawalNotice> getWithdrawalHistory(Long investorId) {
@@ -157,7 +175,7 @@ public class WithdrawalService {
                 .collect(Collectors.toList());
 
         StringBuilder csv = new StringBuilder();
-        csv.append("id,date,product_id,product_name,amount,status,previous_balance,remaining_balance\n");
+        csv.append("id,date,product_id,product_name,amount,status,reason,reference,previous_balance,remaining_balance\n");
 
         for (WithdrawalNotice notice : notices) {
             String productName = investmentProductRepository.findById(notice.getProductId())
@@ -169,6 +187,8 @@ public class WithdrawalService {
                     .append(productName).append(',')
                     .append(notice.getAmount()).append(',')
                     .append(notice.getStatus()).append(',')
+                    .append(notice.getReason()).append(',')
+                    .append(notice.getReference()).append(',')
                     .append(notice.getPreviousBalance()).append(',')
                     .append(notice.getRemainingBalance()).append('\n');
         }

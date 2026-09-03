@@ -1,6 +1,8 @@
 package com.enviro.assessment.junior.mpho.dto;
 
+import com.enviro.assessment.junior.mpho.entity.WithdrawalReason;
 import jakarta.validation.constraints.DecimalMin;
+import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 
 import java.math.BigDecimal;
@@ -21,13 +23,21 @@ public class WithdrawalRequest {
     @DecimalMin(value = "0.01", inclusive = true, message = "Amount must be greater than zero")
     private BigDecimal amount;
 
+    @NotNull(message = "Reason is required")
+    private WithdrawalReason reason;
+
+    @NotBlank(message = "Reference is required")
+    private String reference;
+
     public WithdrawalRequest() {
     }
 
-    public WithdrawalRequest(Long investorId, Long productId, BigDecimal amount) {
+    public WithdrawalRequest(Long investorId, Long productId, BigDecimal amount, WithdrawalReason reason, String reference) {
         this.investorId = investorId;
         this.productId = productId;
         this.amount = amount;
+        this.reason = reason;
+        this.reference = reference;
     }
 
     public Long getInvestorId() {
@@ -52,5 +62,21 @@ public class WithdrawalRequest {
 
     public void setAmount(BigDecimal amount) {
         this.amount = amount;
+    }
+
+    public WithdrawalReason getReason() {
+        return reason;
+    }
+
+    public void setReason(WithdrawalReason reason) {
+        this.reason = reason;
+    }
+
+    public String getReference() {
+        return reference;
+    }
+
+    public void setReference(String reference) {
+        this.reference = reference;
     }
 }

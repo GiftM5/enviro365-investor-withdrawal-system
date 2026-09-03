@@ -1,6 +1,7 @@
 package com.enviro.assessment.junior.mpho.dto;
 
 import java.math.BigDecimal;
+import java.time.LocalDate;
 import java.util.List;
 
 /**
@@ -11,15 +12,19 @@ public class PortfolioResponse {
     private Long investorId;
     private String investorName;
     private String portfolioNumber;
+    private LocalDate dateOfBirth;
+    private Integer age;
     private List<ProductSummary> products;
 
     public PortfolioResponse() {
     }
 
-    public PortfolioResponse(Long investorId, String investorName, String portfolioNumber, List<ProductSummary> products) {
+    public PortfolioResponse(Long investorId, String investorName, String portfolioNumber, LocalDate dateOfBirth, Integer age, List<ProductSummary> products) {
         this.investorId = investorId;
         this.investorName = investorName;
         this.portfolioNumber = portfolioNumber;
+        this.dateOfBirth = dateOfBirth;
+        this.age = age;
         this.products = products;
     }
 
@@ -45,6 +50,22 @@ public class PortfolioResponse {
 
     public void setPortfolioNumber(String portfolioNumber) {
         this.portfolioNumber = portfolioNumber;
+    }
+
+    public LocalDate getDateOfBirth() {
+        return dateOfBirth;
+    }
+
+    public void setDateOfBirth(LocalDate dateOfBirth) {
+        this.dateOfBirth = dateOfBirth;
+    }
+
+    public Integer getAge() {
+        return age;
+    }
+
+    public void setAge(Integer age) {
+        this.age = age;
     }
 
     public List<ProductSummary> getProducts() {

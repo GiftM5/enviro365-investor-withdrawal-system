@@ -6,6 +6,7 @@ import com.enviro.assessment.junior.mpho.entity.InvestmentProduct;
 import com.enviro.assessment.junior.mpho.entity.Investor;
 import com.enviro.assessment.junior.mpho.entity.Portfolio;
 import com.enviro.assessment.junior.mpho.entity.ProductType;
+import com.enviro.assessment.junior.mpho.entity.WithdrawalReason;
 import com.enviro.assessment.junior.mpho.exception.ResourceNotFoundException;
 import com.enviro.assessment.junior.mpho.repository.InvestmentProductRepository;
 import com.enviro.assessment.junior.mpho.repository.InvestorRepository;
@@ -18,6 +19,7 @@ import org.springframework.context.annotation.Import;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.time.Period;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -44,7 +46,7 @@ class WithdrawalServiceTest {
         InvestmentProduct product = createRetirementProduct(investor, "Retirement Annuity", new BigDecimal("200000.00"));
 
         IllegalArgumentException exception = assertThrows(IllegalArgumentException.class,
-                () -> withdrawalService.createWithdrawal(new WithdrawalRequest(investor.getId(), product.getId(), new BigDecimal("50000.00"))));
+                () -> withdrawalService.createWithdrawal(new WithdrawalRequest(investor.getId(), product.getId(), new BigDecimal("50000.00"), WithdrawalReason.OTHER, "REF-TEST")));
 
         assertThat(exception.getMessage()).contains("older than 65");
     }
@@ -55,7 +57,7 @@ class WithdrawalServiceTest {
         InvestmentProduct product = createRetirementProduct(investor, "Retirement Annuity", new BigDecimal("200000.00"));
 
         IllegalArgumentException exception = assertThrows(IllegalArgumentException.class,
-                () -> withdrawalService.createWithdrawal(new WithdrawalRequest(investor.getId(), product.getId(), new BigDecimal("50000.00"))));
+                () -> withdrawalService.createWithdrawal(new WithdrawalRequest(investor.getId(), product.getId(), new BigDecimal("50000.00"), WithdrawalReason.OTHER, "REF-TEST")));
 
         assertThat(exception.getMessage()).contains("older than 65");
     }
@@ -65,7 +67,7 @@ class WithdrawalServiceTest {
         Investor investor = createInvestor("Anne", "Six", LocalDate.now().minusYears(66), "age66@example.com");
         InvestmentProduct product = createRetirementProduct(investor, "Retirement Annuity", new BigDecimal("200000.00"));
 
-        WithdrawalResponse response = withdrawalService.createWithdrawal(new WithdrawalRequest(investor.getId(), product.getId(), new BigDecimal("50000.00")));
+        WithdrawalResponse response = withdrawalService.createWithdrawal(new WithdrawalRequest(investor.getId(), product.getId(), new BigDecimal("50000.00"), WithdrawalReason.OTHER, "REF-TEST"));
 
         assertThat(response.getRemainingBalance()).isEqualByComparingTo("150000.00");
     }
@@ -76,7 +78,7 @@ class WithdrawalServiceTest {
         InvestmentProduct product = createRetirementProduct(investor, "Retirement Annuity", new BigDecimal("100000.00"));
 
         IllegalArgumentException exception = assertThrows(IllegalArgumentException.class,
-                () -> withdrawalService.createWithdrawal(new WithdrawalRequest(investor.getId(), product.getId(), new BigDecimal("100001.00"))));
+                () -> withdrawalService.createWithdrawal(new WithdrawalRequest(investor.getId(), product.getId(), new BigDecimal("100001.00"), WithdrawalReason.OTHER, "REF-TEST")));
 
         assertThat(exception.getMessage()).contains("available product balance");
     }
@@ -86,7 +88,7 @@ class WithdrawalServiceTest {
         Investor investor = createInvestor("Cara", "Limit", LocalDate.now().minusYears(70), "limit@example.com");
         InvestmentProduct product = createRetirementProduct(investor, "Retirement Annuity", new BigDecimal("100000.00"));
 
-        WithdrawalResponse response = withdrawalService.createWithdrawal(new WithdrawalRequest(investor.getId(), product.getId(), new BigDecimal("90000.00")));
+        WithdrawalResponse response = withdrawalService.createWithdrawal(new WithdrawalRequest(investor.getId(), product.getId(), new BigDecimal("90000.00"), WithdrawalReason.OTHER, "REF-TEST"));
 
         assertThat(response.getRemainingBalance()).isEqualByComparingTo("10000.00");
     }
@@ -97,7 +99,7 @@ class WithdrawalServiceTest {
         InvestmentProduct product = createRetirementProduct(investor, "Retirement Annuity", new BigDecimal("100000.00"));
 
         IllegalArgumentException exception = assertThrows(IllegalArgumentException.class,
-                () -> withdrawalService.createWithdrawal(new WithdrawalRequest(investor.getId(), product.getId(), new BigDecimal("90001.00"))));
+                () -> withdrawalService.createWithdrawal(new WithdrawalRequest(investor.getId(), product.getId(), new BigDecimal("90001.00"), WithdrawalReason.OTHER, "REF-TEST")));
 
         assertThat(exception.getMessage()).contains("maximum allowed");
     }
@@ -108,9 +110,9 @@ class WithdrawalServiceTest {
         InvestmentProduct product = createRetirementProduct(investor, "Retirement Annuity", new BigDecimal("100000.00"));
 
         assertThrows(IllegalArgumentException.class,
-                () -> withdrawalService.createWithdrawal(new WithdrawalRequest(investor.getId(), product.getId(), BigDecimal.ZERO)));
+                () -> withdrawalService.createWithdrawal(new WithdrawalRequest(investor.getId(), product.getId(), BigDecimal.ZERO, WithdrawalReason.OTHER, "REF-TEST")));
         assertThrows(IllegalArgumentException.class,
-                () -> withdrawalService.createWithdrawal(new WithdrawalRequest(investor.getId(), product.getId(), new BigDecimal("-100.00"))));
+                () -> withdrawalService.createWithdrawal(new WithdrawalRequest(investor.getId(), product.getId(), new BigDecimal("-100.00"), WithdrawalReason.OTHER, "REF-TEST")));
     }
 
     @Test
@@ -118,12 +120,23 @@ class WithdrawalServiceTest {
         Investor investor = createInvestor("Frank", "Balance", LocalDate.now().minusYears(70), "balance2@example.com");
         InvestmentProduct product = createRetirementProduct(investor, "Retirement Annuity", new BigDecimal("200000.00"));
 
-        WithdrawalResponse response = withdrawalService.createWithdrawal(new WithdrawalRequest(investor.getId(), product.getId(), new BigDecimal("50000.00")));
+        WithdrawalResponse response = withdrawalService.createWithdrawal(new WithdrawalRequest(investor.getId(), product.getId(), new BigDecimal("50000.00"), WithdrawalReason.OTHER, "REF-TEST"));
 
         assertThat(response.getPreviousBalance()).isEqualByComparingTo("200000.00");
         assertThat(response.getRemainingBalance()).isEqualByComparingTo("150000.00");
         assertThat(investmentProductRepository.findById(product.getId()).orElseThrow().getBalance())
                 .isEqualByComparingTo("150000.00");
+    }
+
+    @Test
+    void shouldExposeInvestorAgeOnPortfolioResponse() {
+        LocalDate dateOfBirth = LocalDate.now().minusYears(42).minusDays(10);
+        Investor investor = createInvestor("Grace", "Age", dateOfBirth, "age@example.com");
+        createRetirementProduct(investor, "Retirement Annuity", new BigDecimal("200000.00"));
+
+        var response = withdrawalService.getPortfolio(investor.getId());
+
+        assertThat(response.getAge()).isEqualTo(Period.between(dateOfBirth, LocalDate.now()).getYears());
     }
 
     @Test
@@ -133,7 +146,7 @@ class WithdrawalServiceTest {
         InvestmentProduct product = createRetirementProduct(otherInvestor, "Retirement Annuity", new BigDecimal("200000.00"));
 
         IllegalArgumentException exception = assertThrows(IllegalArgumentException.class,
-                () -> withdrawalService.createWithdrawal(new WithdrawalRequest(investor.getId(), product.getId(), new BigDecimal("10000.00"))));
+                () -> withdrawalService.createWithdrawal(new WithdrawalRequest(investor.getId(), product.getId(), new BigDecimal("10000.00"), WithdrawalReason.OTHER, "REF-TEST")));
 
         assertThat(exception.getMessage()).contains("does not belong to this investor");
     }
@@ -144,7 +157,7 @@ class WithdrawalServiceTest {
         InvestmentProduct product = createRetirementProduct(investor, "Retirement Annuity", new BigDecimal("100000.00"));
 
         assertThrows(IllegalArgumentException.class,
-                () -> withdrawalService.createWithdrawal(new WithdrawalRequest(investor.getId(), product.getId(), new BigDecimal("90001.00"))));
+                () -> withdrawalService.createWithdrawal(new WithdrawalRequest(investor.getId(), product.getId(), new BigDecimal("90001.00"), WithdrawalReason.OTHER, "REF-TEST")));
 
         assertThat(investmentProductRepository.findById(product.getId()).orElseThrow().getBalance())
                 .isEqualByComparingTo("100000.00");
@@ -155,7 +168,7 @@ class WithdrawalServiceTest {
         Investor investor = createInvestor("Jill", "Investment", LocalDate.now().minusYears(60), "investment@example.com");
         InvestmentProduct product = createProduct(investor, "Growth Fund", ProductType.INVESTMENT, new BigDecimal("150000.00"));
 
-        WithdrawalResponse response = withdrawalService.createWithdrawal(new WithdrawalRequest(investor.getId(), product.getId(), new BigDecimal("60000.00")));
+        WithdrawalResponse response = withdrawalService.createWithdrawal(new WithdrawalRequest(investor.getId(), product.getId(), new BigDecimal("60000.00"), WithdrawalReason.OTHER, "REF-TEST"));
 
         assertThat(response.getRemainingBalance()).isEqualByComparingTo("90000.00");
     }
@@ -163,7 +176,7 @@ class WithdrawalServiceTest {
     @Test
     void shouldRejectWhenInvestorDoesNotExist() {
         ResourceNotFoundException exception = assertThrows(ResourceNotFoundException.class,
-                () -> withdrawalService.createWithdrawal(new WithdrawalRequest(999999L, 1L, new BigDecimal("1000.00"))));
+                () -> withdrawalService.createWithdrawal(new WithdrawalRequest(999999L, 1L, new BigDecimal("1000.00"), WithdrawalReason.OTHER, "REF-TEST")));
 
         assertThat(exception.getMessage()).contains("Investor not found");
     }
@@ -173,7 +186,7 @@ class WithdrawalServiceTest {
         Investor investor = createInvestor("Kim", "MissingProduct", LocalDate.now().minusYears(70), "missing-product@example.com");
 
         ResourceNotFoundException exception = assertThrows(ResourceNotFoundException.class,
-                () -> withdrawalService.createWithdrawal(new WithdrawalRequest(investor.getId(), 999999L, new BigDecimal("1000.00"))));
+                () -> withdrawalService.createWithdrawal(new WithdrawalRequest(investor.getId(), 999999L, new BigDecimal("1000.00"), WithdrawalReason.OTHER, "REF-TEST")));
 
         assertThat(exception.getMessage()).contains("Product not found");
     }
