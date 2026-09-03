@@ -137,6 +137,7 @@ class WithdrawalServiceTest {
         var response = withdrawalService.getPortfolio(investor.getId());
 
         assertThat(response.getAge()).isEqualTo(Period.between(dateOfBirth, LocalDate.now()).getYears());
+        assertThat(response.getEmail()).isEqualTo("age@example.com");
     }
 
     @Test

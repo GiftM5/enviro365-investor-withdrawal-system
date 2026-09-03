@@ -64,6 +64,7 @@ public class WithdrawalService {
         PortfolioResponse response = new PortfolioResponse();
         response.setInvestorId(investor.getId());
         response.setInvestorName(investor.getFullName());
+        response.setEmail(investor.getEmail());
         response.setDateOfBirth(investor.getDateOfBirth());
         response.setAge(calculateAge(investor));
 
